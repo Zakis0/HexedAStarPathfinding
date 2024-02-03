@@ -99,5 +99,16 @@ class Hexagon(
     companion object {
         const val VERTICAL_HEXAGONS = 0
         const val HORIZONTAL_HEXAGONS = 1
+
+        fun getCopyOfHexagon(hexagon: Hexagon): Hexagon {
+            return Hexagon(
+                hexagon.centerX,
+                hexagon.centerY,
+                hexagon.radius,
+                hexagon.hexagonColor,
+                hexagon.borderWidth,
+                hexagon.borderColor,
+            )
+        }
     }
 }
