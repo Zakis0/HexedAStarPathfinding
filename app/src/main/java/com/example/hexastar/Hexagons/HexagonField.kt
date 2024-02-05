@@ -1,13 +1,17 @@
 package com.example.hexastar.Hexagons
 
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.util.Log
-import com.example.hexastar.DEBUG
+import com.example.hexastar.DEFAULT_HEXAGON_BORDER_COLOR
+import com.example.hexastar.DEFAULT_HEXAGON_COLOR
 import com.example.hexastar.HEXAGON_BORDER_WIDTH
 import com.example.hexastar.HEX_CORDS_CALCULATION_DEBUG
 import com.example.hexastar.HORIZONTAL_NEIGHBORS_INDEXES_OFFSETS
+import com.example.hexastar.IMPASSABLE_HEXAGON_BORDER_COLOR
+import com.example.hexastar.IMPASSABLE_HEXAGON_COLOR
+import com.example.hexastar.NEIGHBORS_DEBUG
+import com.example.hexastar.NUM_OF_IMPASSABLE_HEXES
 import com.example.hexastar.VERTICAL_NEIGHBORS_INDEXES_OFFSETS
 import kotlin.math.max
 import kotlin.math.min
@@ -18,8 +22,8 @@ class HexagonField(
     val fieldWidth: Int,
     val fieldHeight: Int,
     val hexagonRadius: Float,
-    viewWidth: Int,
-    viewHeight: Int,
+    val viewWidth: Int,
+    val viewHeight: Int,
 ) {
     val INIT_HEXAGON_OFFSET = hexagonRadius
 
@@ -28,22 +32,50 @@ class HexagonField(
     private var verticalOffset: Float = 0f
 
     init {
-        val hexagon = Hexagon(
-            viewWidth / 2f,
-            viewHeight / 2f,
-            hexagonRadius,
-            Color.GREEN,
-            HEXAGON_BORDER_WIDTH,
-            Color.WHITE
-        )
-        fillFieldWithHexagon(hexagon)
+        fillFieldWithHexagon()
     }
-    fun fillFieldWithHexagon(hexagon: Hexagon) {
+    private fun makeRandomNHexesImpassable(n: Int) {
+        val set = mutableSetOf<Indexes>()
+        var newIndexes: Indexes
+        while (set.size != n) {
+            newIndexes = Indexes((0..< fieldHeight).random(), (0..< fieldWidth).random())
+            if (set.add(newIndexes)) {
+                field[newIndexes.i][newIndexes.j]?.apply {
+                    hexInfo.isPassable = false
+                    hexagonColor = IMPASSABLE_HEXAGON_COLOR
+                    borderColor = IMPASSABLE_HEXAGON_BORDER_COLOR
+                }
+            }
+        }
+    }
+    fun fillFieldWithHexagon() {
         field.forEachIndexed { i, hexagonsRow ->
-            hexagonsRow.forEachIndexed { j, _ ->
-                field[i][j] = Hexagon.getCopyOfHexagon(hexagon).apply {
-                    radius = hexagonRadius
+            hexagonsRow.forEachIndexed { j, it ->
+                field[i][j] = Hexagon()
+                field[i][j]!!.apply {
+                    hexagonColor = DEFAULT_HEXAGON_COLOR
+                    borderColor = DEFAULT_HEXAGON_BORDER_COLOR
                     borderWidth = HEXAGON_BORDER_WIDTH
+                    radius = hexagonRadius
+                    indexesInField.i = i
+                    indexesInField.j = j
+                }
+            }
+        }
+        makeRandomNHexesImpassable(NUM_OF_IMPASSABLE_HEXES)
+    }
+    fun fillFieldWithColor() {
+        field.forEachIndexed { i, hexagonsRow ->
+            hexagonsRow.forEachIndexed { j, it ->
+                field[i][j]?.apply {
+                    if (hexInfo.isPassable) {
+                        hexagonColor = DEFAULT_HEXAGON_COLOR
+                        borderColor = DEFAULT_HEXAGON_BORDER_COLOR
+                    }
+                    else {
+                        hexagonColor = IMPASSABLE_HEXAGON_COLOR
+                        borderColor = IMPASSABLE_HEXAGON_BORDER_COLOR
+                    }
                 }
             }
         }
@@ -90,7 +122,7 @@ class HexagonField(
                 }
                 currentHorizontalOffset += horizontalOffset * 2
             }
-            totalHorizontalOffset = if (i % 2 == 0)
+            totalHorizontalOffset = if(isEven(i))
                 horizontalOffset + INIT_HEXAGON_OFFSET
             else
                 INIT_HEXAGON_OFFSET
@@ -98,9 +130,10 @@ class HexagonField(
             totalVerticalOffset += verticalOffset
         }
     }
-    fun drawField(canvas: Canvas, paint: Paint, hexagonOrientation: Int = Hexagon.HORIZONTAL_HEXAGONS) {
+    fun drawField(canvas: Canvas, paint: Paint, hexagonOrientation: Int) {
         countConstants(hexagonOrientation)
         setHexesCords(hexagonOrientation)
+
         field.forEach { row ->
             row.forEach { hex ->
                 hex?.drawHexagon(
@@ -170,9 +203,9 @@ class HexagonField(
         var curDistant: Float
         var curHexagon: Hexagon?
 
-        getNeighborsList(Indexes(roughIndexes.i, roughIndexes.j), hexagonOrientation).forEach {
+        getNeighborsIndexesList(Indexes(roughIndexes.i, roughIndexes.j), hexagonOrientation).forEach {
             if (field[it.i][it.j] != null) {
-                curHexagon = Hexagon.getCopyOfHexagon(field[it.i][it.j]!!)
+                curHexagon = field[it.i][it.j]!!
                 curDistant = touchCords.getDistant(Cords(curHexagon!!.centerX, curHexagon!!.centerY))
 
                 Log.e(HEX_CORDS_CALCULATION_DEBUG, "Index $it CenterCords [${curHexagon!!.centerX}, ${curHexagon!!.centerY}] TouchCords $touchCords Distant $curDistant")
@@ -185,21 +218,27 @@ class HexagonField(
         }
         return closestHexagonsIndexes
     }
-    private fun getNeighborsList(indexes: Indexes, hexagonOrientation: Int): List<Indexes> {
+    private fun getNeighborsIndexesList(indexes: Indexes, hexagonOrientation: Int): List<Indexes> {
         val listOfNeighborsIndex = mutableListOf<Indexes>()
         var neighborsIndexes: Indexes
-        val neighborsOffsetIndexesList: MutableList<Indexes>
+        val neighborsOffsetIndexesList = mutableListOf<Indexes>()
         when (hexagonOrientation) {
-            Hexagon.HORIZONTAL_HEXAGONS -> neighborsOffsetIndexesList = HORIZONTAL_NEIGHBORS_INDEXES_OFFSETS
-            Hexagon.VERTICAL_HEXAGONS -> {
-                neighborsOffsetIndexesList = VERTICAL_NEIGHBORS_INDEXES_OFFSETS
-                neighborsOffsetIndexesList.add(Indexes(-1, if(indexes.i % 2 == 0) 1 else -1))
-                neighborsOffsetIndexesList.add(Indexes(1, if(indexes.i % 2 == 0) 1 else -1))
+            Hexagon.HORIZONTAL_HEXAGONS -> {
+                neighborsOffsetIndexesList.addAll(HORIZONTAL_NEIGHBORS_INDEXES_OFFSETS)
+                neighborsOffsetIndexesList.add(Indexes(if(isEven(indexes.j)) -1 else 1, -1))
+                neighborsOffsetIndexesList.add(Indexes(if(isEven(indexes.j)) -1 else 1, 1))
             }
-            else -> neighborsOffsetIndexesList = mutableListOf()
+            Hexagon.VERTICAL_HEXAGONS -> {
+                neighborsOffsetIndexesList.addAll(VERTICAL_NEIGHBORS_INDEXES_OFFSETS)
+                neighborsOffsetIndexesList.add(Indexes(-1, if(isEven(indexes.i)) -1 else 1))
+                neighborsOffsetIndexesList.add(Indexes(1, if(isEven(indexes.i)) -1 else 1))
+            }
         }
+        Log.w(NEIGHBORS_DEBUG, "neighborsOffsetIndexesList ${neighborsOffsetIndexesList.size}")
+        Log.e(NEIGHBORS_DEBUG, "indexes $indexes")
         neighborsOffsetIndexesList.forEach {
             neighborsIndexes = indexes + it
+            Log.d(NEIGHBORS_DEBUG, "neighborsIndexes $neighborsIndexes")
             if (checkIsNewIndexesInField(neighborsIndexes)) {
                 field[neighborsIndexes.i][neighborsIndexes.j]?.let {
                     listOfNeighborsIndex.add(Indexes(neighborsIndexes.i, neighborsIndexes.j))
@@ -209,7 +248,16 @@ class HexagonField(
         Log.w(HEX_CORDS_CALCULATION_DEBUG, "NeighborsIndexes $listOfNeighborsIndex")
         return listOfNeighborsIndex
     }
+    fun getNeighborsList(indexes: Indexes, hexagonOrientation: Int): List<Hexagon> {
+        val neighborsList = mutableListOf<Hexagon>()
+        val neighborsIndexesList = getNeighborsIndexesList(indexes, hexagonOrientation)
+        neighborsIndexesList.forEach {
+            field[it.i][it.j]?.let { hexagon -> neighborsList.add(hexagon) }
+        }
+        return neighborsList
+    }
     private fun checkIsNewIndexesInField(indexes: Indexes): Boolean {
         return indexes.i in 0..<fieldHeight && indexes.j in 0..<fieldWidth
     }
+    private fun isEven(value: Int) = value % 2 == 0
 }
