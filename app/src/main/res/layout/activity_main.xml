@@ -6,12 +6,157 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <com.example.hexastar.Hexagons.HexagonFieldView
-        android:id="@+id/hexagonField"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
+
+        <com.example.hexastar.Hexagons.HexagonFieldView
+            android:id="@+id/hexagonField"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/settingsLayout"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent">
+
+            <TextView
+                android:id="@+id/percentOfImpassableHexesTV"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="38dp"
+                android:text="@string/percentOfImpassableHexesTV"
+                android:textSize="10sp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="@+id/use_field_seed_btn"
+                app:layout_constraintStart_toStartOf="@+id/use_field_seed_btn"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.0" />
+
+            <SeekBar
+                android:id="@+id/percentOfImpassableHexesSeekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/percentOfImpassableHexesTV" />
+
+            <TextView
+                android:id="@+id/hexRadiusTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/hexRadiusTV"
+                android:textSize="10sp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="@+id/use_field_seed_btn"
+                app:layout_constraintStart_toStartOf="@+id/use_field_seed_btn"
+                app:layout_constraintTop_toBottomOf="@+id/percentOfImpassableHexesSeekBar"
+                app:layout_constraintVertical_bias="0.0" />
+
+            <SeekBar
+                android:id="@+id/hexRadiusSeekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintBottom_toTopOf="@+id/switchesScroll"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/hexRadiusTv" />
+
+            <ScrollView
+                android:id="@+id/switchesScroll"
+                android:layout_width="wrap_content"
+                android:layout_height="130dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                app:layout_constraintBottom_toTopOf="@+id/use_field_seed_btn"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/hexRadiusSeekBar">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <Switch
+                        android:id="@+id/hexOrientationSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="hexOrientationSwitch"
+                        android:textSize="10sp" />
+
+                    <Switch
+                        android:id="@+id/pathFindingModeSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="pathFindingModeSwitch"
+                        android:textSize="10sp" />
+
+                    <Switch
+                        android:id="@+id/drawTouchCircleSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="@string/drawTouchCircleSwitch"
+                        android:textSize="10sp" />
+
+                    <Switch
+                        android:id="@+id/drawAuxiliaryHexesSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="@string/drawAuxiliaryHexesSwitch"
+                        android:textSize="10sp" />
+
+                    <Switch
+                        android:id="@+id/drawConnectionLinesSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="@string/drawConnectionLinesSwitch"
+                        android:textSize="10sp" />
+
+                    <Switch
+                        android:id="@+id/showAStarValuesSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="@string/showAStarValuesSwitch"
+                        android:textSize="10sp" />
+                </LinearLayout>
+            </ScrollView>
+
+            <Button
+                android:id="@+id/use_field_seed_btn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:text="@string/useSeedBtn"
+                android:textColorHighlight="#978F8F"
+                android:textColorLink="#918E8E"
+                android:textSize="10sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/switchesScroll"/>
+
+            <Button
+                android:id="@+id/copyFieldSeedBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="@string/copyFieldSeedBtn"
+                android:textSize="10sp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="@+id/use_field_seed_btn"
+                app:layout_constraintStart_toStartOf="@+id/use_field_seed_btn"
+                app:layout_constraintTop_toBottomOf="@+id/use_field_seed_btn"
+                app:layout_constraintVertical_bias="0.0" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </LinearLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,3 +1,19 @@
 <resources>
     <string name="app_name">HexAStar</string>
+    <string name="seedETHint">Field seed</string>
+    <string name="useSeedBtn">Use seed</string>
+    <string name="copyFieldSeedBtn">Copy seed</string>
+    <string name="percentOfImpassableHexesTV">Impassable percent</string>
+    <string name="hexRadiusTV">Hex radius</string>
+    <string name="drawTouchCircleSwitch">Touch Circle</string>
+    <string name="drawAuxiliaryHexesSwitch">Auxiliary Hexes</string>
+    <string name="drawConnectionLinesSwitch">Connection Lines</string>
+    <string name="showAStarValuesSwitch">Show A* Values</string>
+
+    <string name="pathFindingModeImmediately">Immediately</string>
+    <string name="pathFindingModeStepByStep">Step By Step</string>
+
+    <string name="hexagonOrientationHorizontal">Horizontal</string>
+    <string name="hexagonOrientationVertical">Vertical</string>
+
 </resources>

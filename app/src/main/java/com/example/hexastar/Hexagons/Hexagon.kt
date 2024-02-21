@@ -33,7 +33,7 @@ class Hexagon(
     fun drawHexagon(
         canvas: Canvas,
         paint: Paint,
-        drawMode: Int = VERTICAL_HEXAGONS,
+        drawMode: Int = HORIZONTAL_HEXAGONS,
         drawBorder: Boolean = false
     ) {
         val paintInitColor = paint.color

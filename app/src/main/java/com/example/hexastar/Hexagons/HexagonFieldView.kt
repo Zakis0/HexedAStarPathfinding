@@ -4,37 +4,46 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.util.AttributeSet
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
+import android.widget.Toast
 import com.example.hexastar.AStar.AStar
 import com.example.hexastar.AStar.Heap
 import com.example.hexastar.A_STAR_DEBUG
-import com.example.hexastar.ENABLE_PATH_FINDING
-import com.example.hexastar.TARGET_HEXAGON_BORDER_COLOR
-import com.example.hexastar.TARGET_HEXAGON_COLOR
-import com.example.hexastar.FIELD_HEIGHT
-import com.example.hexastar.FIELD_WIDTH
-import com.example.hexastar.HEXAGON_ORIENTATION
-import com.example.hexastar.HEXAGON_RADIUS
-import com.example.hexastar.TOUCH_HEXAGON_BORDER_COLOR
-import com.example.hexastar.TOUCH_HEXAGON_COLOR
+import com.example.hexastar.CONNECTION_LINE_COLOR
+import com.example.hexastar.CONNECTION_LINE_WIDTH_PERCENTAGE_OF_HEX_RADIUS
+import com.example.hexastar.DEFAULT_HEXAGON_BORDER_COLOR
+import com.example.hexastar.DEFAULT_HEXAGON_COLOR
+import com.example.hexastar.HOVERED_HEXAGON_BORDER_COLOR
+import com.example.hexastar.HOVERED_HEXAGON_COLOR
+import com.example.hexastar.HexInfo
+import com.example.hexastar.MainActivity
+import com.example.hexastar.NUMBERS_COLOR
+import com.example.hexastar.NUMBERS_DISTANT_OFFSET
+import com.example.hexastar.NUMBERS_F_VERTICAL_OFFSET
+import com.example.hexastar.NUMBERS_VERTICAL_OFFSET
+import com.example.hexastar.NodeTypes
 import com.example.hexastar.PATH_HEXAGON_BORDER_COLOR
 import com.example.hexastar.PATH_HEXAGON_COLOR
-import com.example.hexastar.TO_DRAW_TOUCH_CIRCLE_GENERAL
-import com.example.hexastar.TOUCH_CIRCLE_RADIUS_IS_N_PERCENT_OF_HEX_RADIUS
-import com.example.hexastar.SEARCH_PATH_MODE
+import com.example.hexastar.Params
+import com.example.hexastar.SEED_DEBUG
 import com.example.hexastar.START_HEXAGON_BORDER_COLOR
 import com.example.hexastar.START_HEXAGON_COLOR
 import com.example.hexastar.SearchPathMode
+import com.example.hexastar.TARGET_HEXAGON_BORDER_COLOR
+import com.example.hexastar.TARGET_HEXAGON_COLOR
 import com.example.hexastar.TOUCH_CIRCLE_COLOR
+import com.example.hexastar.TOUCH_CIRCLE_RADIUS_PERCENTAGE_OF_HEX_RADIUS
+import kotlin.math.sqrt
 
 class HexagonFieldView(context: Context?, attrs: AttributeSet?) : View(context, attrs) {
     private val paint: Paint = Paint()
-    private lateinit var hexagonField: HexagonField
+    lateinit var hexagonField: HexagonField
 
-    private var isOddClick = false
+    var activity: MainActivity? = null
 
     private var startNode: Hexagon? = null
     private var targetNode: Hexagon? = null
@@ -47,10 +56,13 @@ class HexagonFieldView(context: Context?, attrs: AttributeSet?) : View(context, 
     private var touchCircleCords = Cords()
     private var drawTouchCircle = false
 
-    private var isTouchToClearPath = false
+    private var isOddClick = false
+    private var isFieldSetup = true
+
+    private var isTouchToClean = false
 
     private var isStepByStepPathFound = false
-    private var startStepByStepPathFinding = false
+    private var stepByStepPathFinding = false
 
     private var toSearch: MutableList<Hexagon>? = null
     private var processed: MutableList<Hexagon>? = null
@@ -61,31 +73,32 @@ class HexagonFieldView(context: Context?, attrs: AttributeSet?) : View(context, 
     }
     public override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        hexagonField.drawField(canvas, paint, HEXAGON_ORIENTATION)
-        if (TO_DRAW_TOUCH_CIRCLE_GENERAL &&
+        hexagonField.drawField(canvas, paint, Params.HEXAGON_ORIENTATION)
+        if (Params.DRAW_TOUCH_CIRCLE_GENERAL &&
             drawTouchCircle &&
-            !startStepByStepPathFinding
+            !stepByStepPathFinding
             ) {
             canvas.drawCircle(
                 touchCircleCords.x,
                 touchCircleCords.y,
-                hexagonField.hexagonRadius * TOUCH_CIRCLE_RADIUS_IS_N_PERCENT_OF_HEX_RADIUS,
+                hexagonField.hexagonRadius * TOUCH_CIRCLE_RADIUS_PERCENTAGE_OF_HEX_RADIUS,
                 paint.apply {
                     color = TOUCH_CIRCLE_COLOR
                 }
             )
         }
+        if (Params.DRAW_CONNECTION_LINES) {
+            drawConnectionLines(canvas, paint)
+        }
+        if (Params.SHOW_A_STAR_VALUES) {
+            drawHexesInfo(canvas, paint)
+        }
     }
     @SuppressLint("DrawAllocation")
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        hexagonField = HexagonField(
-            FIELD_WIDTH,
-            FIELD_HEIGHT,
-            HEXAGON_RADIUS,
-            measuredWidth,
-            measuredHeight
-        )
+        generateField()
+        Toast.makeText(context, "asd", Toast.LENGTH_SHORT).show()
     }
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -96,10 +109,12 @@ class HexagonFieldView(context: Context?, attrs: AttributeSet?) : View(context, 
                 drawTouchCircle = true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (!startStepByStepPathFinding) {
+                if (!stepByStepPathFinding
+                    && !isTouchToClean
+                    ) {
                     setTouchCircleCords(touchCords)
                     touchedHexagonIndexes =
-                        hexagonField.getHexIndexesByCords(touchCords, HEXAGON_ORIENTATION)
+                        hexagonField.getHexIndexesByCords(touchCords, Params.HEXAGON_ORIENTATION)
                     setbackColorOfLastTouchedHex()
                     changeColorOfTouchedHex(touchedHexagonIndexes)
                     invalidate()
@@ -107,22 +122,51 @@ class HexagonFieldView(context: Context?, attrs: AttributeSet?) : View(context, 
             }
             MotionEvent.ACTION_UP -> {
                 drawTouchCircle = false
-                touchedHexagonIndexes = hexagonField.getHexIndexesByCords(touchCords, HEXAGON_ORIENTATION)
-                if (touchedHexagonIndexes != Indexes.EMPTY_INDEXES) {
-                    touchedHexagon = hexagonField.field[touchedHexagonIndexes.i][touchedHexagonIndexes.j]!!
-                }
-                if (!ENABLE_PATH_FINDING ||
-                    touchedHexagon == null ||
-                    (!touchedHexagon!!.hexInfo.isPassable && !isTouchToClearPath)) {
-                    setbackColorOfLastTouchedHex()
+                if (isTouchToClean) {
+                    cleaningPhase()
                     return true
                 }
-                if (!startStepByStepPathFinding) {
+                touchedHexagonIndexes =
+                    hexagonField.getHexIndexesByCords(touchCords, Params.HEXAGON_ORIENTATION)
+                if (touchedHexagonIndexes != Indexes.EMPTY_INDEXES) {
+                    touchedHexagon =
+                        hexagonField.field[touchedHexagonIndexes.i][touchedHexagonIndexes.j]!!
+                }
+                if (!Params.ENABLE_PATH_FINDING ||
+                    touchedHexagon == null ||
+                    (
+                        !stepByStepPathFinding &&
+                        !touchedHexagon!!.hexInfo.isPassable
+                    )
+                ) {
+                    setbackColorOfLastTouchedHex() // ?
+                    return true
+                }
+                if (!stepByStepPathFinding) {
                     changeParityOfClick()
                 }
-                when (SEARCH_PATH_MODE) {
-                    SearchPathMode.IMMEDIATELY -> pathFindImmediately()
-                    SearchPathMode.STEP_BY_STEP -> pathFindStepByStep()
+                if (isFieldSetup) {
+                    if (isOddClick) {
+                        setStartPoint(touchedHexagon!!)
+                        activity?.changeEnablementOfSettings()
+                        invalidate()
+                        return true
+                    }
+                    else {
+                        setTargetPoint(touchedHexagon!!)
+                        initPathFinding()
+                        invalidate()
+                        isFieldSetup = false
+                    }
+                }
+                when (Params.SEARCH_PATH_MODE) {
+                    SearchPathMode.IMMEDIATELY -> {
+                        pathFindImmediately()
+                    }
+                    SearchPathMode.STEP_BY_STEP -> {
+                        stepByStepPathFinding = true
+                        pathFindStepByStep()
+                    }
                 }
             }
         }
@@ -130,13 +174,16 @@ class HexagonFieldView(context: Context?, attrs: AttributeSet?) : View(context, 
     }
     private fun setStartPoint(touchedHexagon: Hexagon) {
         startNode = touchedHexagon
+        startNode!!.hexInfo.type = NodeTypes.PATH
         startNode!!.hexagonColor = START_HEXAGON_COLOR
         startNode!!.borderColor = START_HEXAGON_BORDER_COLOR
+        rememberHexagonColor()
     }
-    private fun setEndPoint(touchedHexagon: Hexagon) {
+    private fun setTargetPoint(touchedHexagon: Hexagon) {
         targetNode = touchedHexagon
         targetNode!!.hexagonColor = TARGET_HEXAGON_COLOR
         targetNode!!.borderColor = TARGET_HEXAGON_BORDER_COLOR
+        rememberHexagonColor()
     }
     private fun printPath() {
         for (node in path!!) {
@@ -147,95 +194,55 @@ class HexagonFieldView(context: Context?, attrs: AttributeSet?) : View(context, 
             node.borderColor = PATH_HEXAGON_BORDER_COLOR
         }
     }
-    private fun resetHexesColors() {
+    fun resetHexesColors() {
         hexagonField.fillFieldWithColor()
     }
     private fun changeParityOfClick() {
         isOddClick = !isOddClick
     }
     private fun pathFindImmediately() {
-        if (isTouchToClearPath) {
-            touchToClearPath()
-            return
-        }
-        if (isOddClick) {
-            resetHexesColors()
-            setStartPoint(touchedHexagon!!)
-            invalidate()
-        }
-        else {
-            setEndPoint(touchedHexagon!!)
-
-            toSearch = mutableListOf( startNode!! )
-            processed = mutableListOf()
-            path = mutableListOf()
-            heap = Heap(hexagonField.fieldWidth * hexagonField.fieldHeight)
-
-            path = AStar.findPath(
-                this,
-                hexagonField,
-                startNode!!,
-                targetNode!!,
-                toSearch!!,
-                processed!!,
-                path!!,
-                heap!!,
-            )
-            printPath()
-            isTouchToClearPath = true
-        }
+        path = AStar.findPath(
+            this,
+            hexagonField,
+            startNode!!,
+            targetNode!!,
+            toSearch!!,
+            processed!!,
+            path!!,
+            heap!!,
+        )
+        endPathFinding()
     }
     private fun pathFindStepByStep() {
-        if (isTouchToClearPath) {
-            touchToClearPath()
-            return
-        }
-        if (!startStepByStepPathFinding) {
-            initStepByStepPathFinding()
-        }
-        else {
-            isStepByStepPathFound = AStar.doStepOfFindingPath(
-                hexagonField,
-                startNode!!,
-                targetNode!!,
-                toSearch!!,
-                processed!!,
-                path!!,
-                heap!!,
-            )
-            invalidate()
-        }
+        isStepByStepPathFound = AStar.doStepOfFindingPath(
+            hexagonField,
+            startNode!!,
+            targetNode!!,
+            toSearch!!,
+            processed!!,
+            path!!,
+            heap!!,
+        )
+        invalidate()
         if (isStepByStepPathFound) {
-            printPath()
-            isTouchToClearPath = true
-            isStepByStepPathFound = false
-            startStepByStepPathFinding = false
+            endPathFinding()
         }
     }
-    private fun initStepByStepPathFinding() {
-        if (isOddClick) {
-            resetHexesColors()
-            setStartPoint(touchedHexagon!!)
-            invalidate()
-        }
-        else {
-            setEndPoint(touchedHexagon!!)
-            Log.e(A_STAR_DEBUG, "StartNode: ${startNode!!.indexesInField}\n" +
-                    "TargetNode: ${targetNode!!.indexesInField}")
-            invalidate()
-            toSearch = mutableListOf( startNode!! )
-            processed = mutableListOf()
-            path = mutableListOf()
-            heap = Heap(hexagonField.fieldWidth * hexagonField.fieldHeight)
-            heap!!.add(startNode!!)
-            startStepByStepPathFinding = true
-        }
+    private fun initPathFinding() {
+        Log.e(A_STAR_DEBUG, "StartNode: ${startNode!!.indexesInField}\n" +
+                "TargetNode: ${targetNode!!.indexesInField}")
+        toSearch = mutableListOf( startNode!! )
+        processed = mutableListOf()
+        path = mutableListOf()
+        heap = Heap(hexagonField.fieldWidth * hexagonField.fieldHeight)
+        heap!!.add(startNode!!)
+    }
+    private fun endPathFinding() {
+        printPath()
+        isTouchToClean = true
     }
     private fun setbackColorOfLastTouchedHex() {
-        if (touchedHexagon != null &&
-            touchedHexagon != startNode &&
-            touchedHexagon != targetNode
-        ) {
+        if (touchedHexagon != null) {
             touchedHexagon?.hexagonColor = touchedHexagonsLastColor!!
             touchedHexagon?.borderColor = touchedHexagonsLastColorBorder!!
         }
@@ -244,19 +251,135 @@ class HexagonFieldView(context: Context?, attrs: AttributeSet?) : View(context, 
         if (touchedHexagonIndexes != Indexes.EMPTY_INDEXES) {
             touchedHexagon =
                 hexagonField.field[touchedHexagonIndexes.i][touchedHexagonIndexes.j]!!
-            touchedHexagonsLastColor = touchedHexagon!!.hexagonColor
-            touchedHexagonsLastColorBorder = touchedHexagon!!.borderColor
-            touchedHexagon!!.hexagonColor = TOUCH_HEXAGON_COLOR
-            touchedHexagon!!.borderColor = TOUCH_HEXAGON_BORDER_COLOR
+            rememberHexagonColor()
+            touchedHexagon!!.hexagonColor = HOVERED_HEXAGON_COLOR
+            touchedHexagon!!.borderColor = HOVERED_HEXAGON_BORDER_COLOR
         }
+    }
+    private fun rememberHexagonColor() {
+        touchedHexagonsLastColor = touchedHexagon!!.hexagonColor
+        touchedHexagonsLastColorBorder = touchedHexagon!!.borderColor
+    }
+    private fun resetRememberedHexagonColor() {
+        touchedHexagonsLastColor = DEFAULT_HEXAGON_COLOR
+        touchedHexagonsLastColorBorder = DEFAULT_HEXAGON_BORDER_COLOR
     }
     private fun setTouchCircleCords(touchCords: Cords) {
         touchCircleCords.x = touchCords.x
         touchCircleCords.y = touchCords.y
     }
-    private fun touchToClearPath() {
+    private fun cleaningPhase() {
+        isTouchToClean = false
         resetHexesColors()
-        isTouchToClearPath = false
-        changeParityOfClick()
+        clearConnectionLines()
+        clearHexesInfo()
+        resetRememberedHexagonColor()
+        activity?.changeEnablementOfSettings()
+        invalidate()
+        isOddClick = false
+        isFieldSetup = true
+        isStepByStepPathFound = false
+        stepByStepPathFinding = false
+    }
+    private fun drawConnectionLines(canvas: Canvas, paint: Paint) {
+        val initPaintColor = paint.color
+        val initPaintStrokeWidth = paint.strokeWidth
+        paint.color = CONNECTION_LINE_COLOR
+        paint.strokeWidth = hexagonField.hexagonRadius * CONNECTION_LINE_WIDTH_PERCENTAGE_OF_HEX_RADIUS
+        hexagonField.field.forEach {
+            it.forEach { hex ->
+                if (hex?.hexInfo?.connection != null) {
+                    canvas.drawLine(
+                        hex.centerX,
+                        hex.centerY,
+                        hex.hexInfo.connection!!.centerX,
+                        hex.hexInfo.connection!!.centerY,
+                        paint
+                    )
+                }
+            }
+        }
+        paint.color = initPaintColor
+        paint.strokeWidth = initPaintStrokeWidth
+    }
+    private fun drawHexesInfo(canvas: Canvas, paint: Paint) {
+        for (i in 0..< hexagonField.fieldHeight) {
+            for (hex in hexagonField.field[i]) {
+                if (hex == null ||
+                    hex.hexInfo.type == NodeTypes.NULL ||
+                    hex == startNode || hex == targetNode) {
+                    continue
+                }
+                drawHexagonInfo(hex, canvas, paint)
+            }
+        }
+    }
+    private fun drawHexagonInfo(hexagon: Hexagon, canvas: Canvas, paint: Paint) {
+        val G = hexagon.hexInfo.G.toInt().toString()
+        val H = hexagon.hexInfo.H.toInt().toString()
+        val F = hexagon.hexInfo.F.toInt().toString()
+
+        val xMaxNumberDistant = 0.75f * hexagon.radius
+        val yMaxNumberDistant = sqrt(3f) / 4f * hexagon.radius
+
+        val gBound = Rect()
+        paint.getTextBounds(G, 0, 1, gBound)
+        val hBound = Rect()
+        paint.getTextBounds(H, 0, 1, hBound)
+
+        val GCords = Cords(
+            hexagon.centerX * (1 - NUMBERS_DISTANT_OFFSET) + NUMBERS_DISTANT_OFFSET * (hexagon.centerX - xMaxNumberDistant + gBound.width()),
+            hexagon.centerY * (1 - NUMBERS_DISTANT_OFFSET) + NUMBERS_DISTANT_OFFSET * (hexagon.centerY - yMaxNumberDistant + NUMBERS_VERTICAL_OFFSET* hexagon.radius + gBound.height())
+        )
+        val HCords = Cords(
+            hexagon.centerX * (1 - NUMBERS_DISTANT_OFFSET) + NUMBERS_DISTANT_OFFSET * (hexagon.centerX + xMaxNumberDistant - hBound.width()),
+            hexagon.centerY * (1 - NUMBERS_DISTANT_OFFSET) + NUMBERS_DISTANT_OFFSET * (hexagon.centerY - yMaxNumberDistant + NUMBERS_VERTICAL_OFFSET * hexagon.radius + hBound.height())
+        )
+        val FCords = Cords(
+            hexagon.centerX,
+            hexagon.centerY * (1 - NUMBERS_DISTANT_OFFSET) + NUMBERS_DISTANT_OFFSET * (hexagon.centerY + (2 * yMaxNumberDistant) * NUMBERS_F_VERTICAL_OFFSET + NUMBERS_VERTICAL_OFFSET * hexagon.radius)
+        )
+        val initPaintColor = paint.color
+        val initPaintTextSize = paint.textSize
+        paint.textSize = hexagon.radius * 0.4f
+        paint.textAlign = Paint.Align.CENTER
+        paint.color = NUMBERS_COLOR
+        canvas.drawText(F, FCords.x, FCords.y, paint)
+        canvas.drawText(G, GCords.x, GCords.y, paint)
+        canvas.drawText(H, HCords.x, HCords.y, paint)
+        paint.color = initPaintColor
+        paint.textSize = initPaintTextSize
+        paint.textAlign = Paint.Align.LEFT
+    }
+    private fun clearHexesInfo() {
+        hexagonField.field.forEach { row ->
+            row.forEach {
+                it?.hexInfo?.reset()
+            }
+        }
+    }
+    private fun clearConnectionLines() {
+        hexagonField.field.forEach {
+            it.forEach { hex ->
+                if (hex?.hexInfo?.connection != null) {
+                    hex.hexInfo.connection = null
+                }
+            }
+        }
+    }
+
+    private fun generateField() {
+        hexagonField = if (Params.GENERATE_FIELD_BY_INIT_FIELD_SEED) {
+            HexagonField.createHexagonFieldBySeed(Params.INIT_FIELD_SEED)
+        }
+        else {
+            HexagonField.createHexagonFieldByViewSize(
+                measuredWidth,
+                measuredHeight,
+                Params.HEXAGON_RADIUS
+            )
+        }
+        resetHexesColors()
+        Log.d(SEED_DEBUG, "Seed: ${hexagonField.getFieldSeed()}")
     }
 }
